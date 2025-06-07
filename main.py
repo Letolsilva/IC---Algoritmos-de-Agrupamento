@@ -7,6 +7,9 @@ from scipy.io import loadmat
 from collections import Counter
 from sklearn.preprocessing import StandardScaler
 from collections import Counter
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 def load_dataset_from_mat(path):
@@ -62,7 +65,7 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
     return y_pred
 
 
-def run_experiment(X, y, model_type="kmeans"):
+def run_experiment(X, y, model_type="kmeans", return_accs=False):
     accs = []
     cms = []
     for s in range(1, 31):
@@ -77,7 +80,7 @@ def run_experiment(X, y, model_type="kmeans"):
         # Print da distribuição das classes
         print(f"Repetição {s} - Distribuição das classes no treino:", Counter(y_train))
 
-        n_clusters = len(np.unique(y_train))
+        n_clusters = elbow_method(X_train)
         if model_type == "kmeans":
             model = KMeans(n_clusters=n_clusters, random_state=s)
         elif model_type == "agglo":
@@ -92,15 +95,35 @@ def run_experiment(X, y, model_type="kmeans"):
     print(f"Modelo: {model_type}")
     print(f"Acurácia média: {np.mean(accs):.4f} | Desvio padrão: {np.std(accs):.4f}")
     print(f"Matriz de confusão (última repetição):\n{cms[-1]}\n")
-
+    if return_accs:
+        return accs
 
 if __name__ == "__main__":
-    # Troque os caminhos para seus arquivos .mat
+    resultados = {}
     for dataset_path, dataset_name in [
         ("Adult.mat", "Adult"),
         ("Dry_bean.mat", "Dry Bean"),
     ]:
         print(f"==== Dataset: {dataset_name} ====")
         X, y = load_dataset_from_mat(dataset_path)
+        resultados[dataset_name] = {}
         for model_type in ["kmeans", "agglo", "gmm"]:
-            run_experiment(X, y, model_type=model_type)
+            accs = run_experiment(X, y, model_type=model_type, return_accs=True)
+            resultados[dataset_name][model_type] = accs
+
+    # Gerar gráficos
+    for dataset_name in resultados:
+        medias = []
+        desvios = []
+        labels = []
+        for model_type in ["kmeans", "agglo", "gmm"]:
+            accs = resultados[dataset_name][model_type]
+            medias.append(np.mean(accs))
+            desvios.append(np.std(accs))
+            labels.append(model_type)
+        plt.figure()
+        plt.bar(labels, medias, yerr=desvios, capsize=5)
+        plt.ylabel('Acurácia Média')
+        plt.title(f'Resultados no conjunto {dataset_name}')
+        plt.savefig(f'grafico_{dataset_name.lower().replace(" ", "")}.png')
+        plt.close()
