@@ -6,10 +6,12 @@ from sklearn.metrics import accuracy_score, confusion_matrix, silhouette_score
 from scipy.io import loadmat
 from collections import Counter
 from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 
 def load_dataset_from_mat(path):
@@ -20,13 +22,59 @@ def load_dataset_from_mat(path):
     return X, y
 
 
-def plot_metric_vs_k(ks, values, ylabel, title, filename):
+def plot_metric_vs_k(ks, means, stds, ylabel, title, filename):
     plt.figure()
-    plt.plot(ks, values, marker="o")
+    plt.plot(ks, means, marker="o", label="Média")
+    plt.fill_between(ks, means - stds, means + stds, alpha=0.2, label="Erro padrão")
     plt.xlabel("Número de clusters")
     plt.ylabel(ylabel)
     plt.title(title)
+    plt.legend()
     plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+
+def plot_confusion_matrix_normalized(cm, class_labels, title, filename):
+    cm_norm = cm / cm.sum(axis=1, keepdims=True)
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(
+        cm_norm,
+        annot=True,
+        fmt=".2f",
+        cmap="Blues",
+        xticklabels=class_labels,
+        yticklabels=class_labels,
+    )
+    plt.xlabel("Predito")
+    plt.ylabel("Verdadeiro")
+    plt.title(title)
+    plt.tight_layout()
+    plt.savefig(filename)
+    plt.close()
+
+
+def plot_boxplot_accuracies(accs_dict, dataset_name):
+    plt.figure()
+    data = [accs_dict[mt] for mt in ["kmeans", "agglo", "gmm"]]
+    plt.boxplot(data, tick_labels=["KMeans", "Agglo", "GMM"])
+    plt.ylabel("Acurácia")
+    plt.title(f"Boxplot das acurácias - {dataset_name}")
+    plt.tight_layout()
+    plt.savefig(f"boxplot_acuracia_{dataset_name.lower().replace(' ', '')}.png")
+    plt.close()
+
+
+def plot_pca_clusters(X, labels, title, filename):
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X)
+    plt.figure(figsize=(7, 6))
+    scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=labels, cmap="tab10", alpha=0.7)
+    plt.title(title)
+    plt.xlabel("PCA 1")
+    plt.ylabel("PCA 2")
+    plt.colorbar(scatter, label="Cluster")
     plt.tight_layout()
     plt.savefig(filename)
     plt.close()
@@ -61,12 +109,12 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
         majority_label = Counter(y_train[indices]).most_common(1)[0][0]
         cluster_class_map[cluster] = majority_label
     y_pred = np.array([cluster_class_map.get(cluster, -1) for cluster in pred_clusters])
-    return y_pred
+    return y_pred, cluster_labels
 
 
 if __name__ == "__main__":
     resultados = {}
-    seeds = range(1, 5)  # aumente para range(1, 31) depois de testar
+    seeds = range(1, 31)  # aumente para range(1, 31) depois de testar
     max_k = 5
     for dataset_path, dataset_name in [
         ("Adult.mat", "Adult"),
@@ -81,9 +129,17 @@ if __name__ == "__main__":
         X_scaled = scaler.fit_transform(X)
         ks = list(range(2, max_k + 1))
 
+        # Salvar resultados para cada método
         resultados_kmeans = []
         resultados_agglo = []
         resultados_gmm = []
+        stds_kmeans = []
+        stds_agglo = []
+        stds_gmm = []
+        # Para boxplot e PCA
+        all_accs = {"kmeans": [], "agglo": [], "gmm": []}
+        first_X_train = first_labels_dict = {}
+
         for k in ks:
             distortions = []
             silhouettes = []
@@ -116,12 +172,16 @@ if __name__ == "__main__":
             resultados_kmeans.append(np.mean(distortions))
             resultados_agglo.append(np.nanmean(silhouettes))
             resultados_gmm.append(np.mean(bics))
+            stds_kmeans.append(np.std(distortions))
+            stds_agglo.append(np.nanstd(silhouettes))
+            stds_gmm.append(np.std(bics))
 
-        # Plote os gráficos usando as médias
+        # Gráficos com erro padrão
         print("Plotando gráfico de distorção do KMeans...")
         plot_metric_vs_k(
             ks,
-            resultados_kmeans,
+            np.array(resultados_kmeans),
+            np.array(stds_kmeans),
             ylabel="Distorção (Inércia)",
             title=f"KMeans - Distorção média por número de clusters - {dataset_name}",
             filename=f"distorcao_kmeans_{dataset_name.lower().replace(' ', '')}.png",
@@ -129,7 +189,8 @@ if __name__ == "__main__":
         print("Plotando gráfico de silhouette do Agglomerative...")
         plot_metric_vs_k(
             ks,
-            resultados_agglo,
+            np.array(resultados_agglo),
+            np.array(stds_agglo),
             ylabel="Silhouette Média",
             title=f"Agglomerative - Silhouette média por número de clusters - {dataset_name}",
             filename=f"silhouette_agglo_{dataset_name.lower().replace(' ', '')}.png",
@@ -137,7 +198,8 @@ if __name__ == "__main__":
         print("Plotando gráfico de BIC do GMM...")
         plot_metric_vs_k(
             ks,
-            resultados_gmm,
+            np.array(resultados_gmm),
+            np.array(stds_gmm),
             ylabel="BIC Médio",
             title=f"GMM - BIC médio por número de clusters - {dataset_name}",
             filename=f"bic_gmm_{dataset_name.lower().replace(' ', '')}.png",
@@ -152,13 +214,15 @@ if __name__ == "__main__":
         print(f"Agglomerative melhor k: {best_k_agglo}")
         print(f"GMM melhor k: {best_k_gmm}")
 
-        # Agora rode os experimentos só com o melhor k de cada método
+        # Experimentos só com o melhor k de cada método
         for model_type, best_k in zip(
             ["kmeans", "agglo", "gmm"], [best_k_kmeans, best_k_agglo, best_k_gmm]
         ):
             accs = []
             cms = []
-            for s in seeds:
+            first_X_train = None
+            first_labels = None
+            for idx, s in enumerate(seeds):
                 X_train, X_test, y_train, y_test = train_test_split(
                     X, y, test_size=0.3, random_state=s, stratify=y
                 )
@@ -172,11 +236,16 @@ if __name__ == "__main__":
                     model = GaussianMixture(n_components=best_k, random_state=s)
                 else:
                     raise ValueError("Modelo não suportado")
-                y_pred = cluster_supervised_classifier(X_train, y_train, X_test, model)
+                y_pred, cluster_labels = cluster_supervised_classifier(
+                    X_train, y_train, X_test, model
+                )
                 accs.append(accuracy_score(y_test, y_pred))
                 cms.append(confusion_matrix(y_test, y_pred))
+                if idx == 0:
+                    first_X_train = X_train
+                    first_labels = cluster_labels
             mean_cm = np.mean(cms, axis=0)
-            mean_cm = np.round(mean_cm).astype(int)
+            mean_cm = np.round(mean_cm, 2)
             mean_acc = np.mean(accs)
             std_acc = np.std(accs)
             print(f"Modelo: {model_type}")
@@ -184,18 +253,25 @@ if __name__ == "__main__":
             print(f"Matriz de confusão média:\n{mean_cm}\n")
             resultados[dataset_name][model_type] = accs
 
-        # Gráfico resumo de acurácias
-        medias = []
-        desvios = []
-        labels = []
-        for model_type in ["kmeans", "agglo", "gmm"]:
-            accs = resultados[dataset_name][model_type]
-            medias.append(np.mean(accs))
-            desvios.append(np.std(accs))
-            labels.append(model_type)
-        plt.figure()
-        plt.bar(labels, medias, yerr=desvios, capsize=5)
-        plt.ylabel("Acurácia Média")
-        plt.title(f"Resultados no conjunto {dataset_name}")
-        plt.savefig(f'grafico_{dataset_name.lower().replace(" ", "")}.png')
-        plt.close()
+            # Matriz de confusão normalizada (heatmap)
+            class_labels = [str(int(c)) for c in np.unique(y)]
+            plot_confusion_matrix_normalized(
+                mean_cm,
+                class_labels,
+                title=f"Matriz de Confusão Normalizada - {dataset_name} - {model_type}",
+                filename=f"cm_normalizada_{dataset_name.lower().replace(' ', '')}_{model_type}.png",
+            )
+
+            # Clusters com PCA (usando primeira repetição)
+            plot_pca_clusters(
+                first_X_train,
+                first_labels,
+                title=f"Clusters com PCA - {dataset_name} - {model_type}",
+                filename=f"pca_clusters_{dataset_name.lower().replace(' ', '')}_{model_type}.png",
+            )
+
+            # Salva acurácias para boxplot
+            all_accs[model_type] = accs
+
+        # Boxplot das acurácias
+        plot_boxplot_accuracies(all_accs, dataset_name)
