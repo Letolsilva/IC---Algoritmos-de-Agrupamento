@@ -81,7 +81,6 @@ def plot_pca_clusters(X, labels, title, filename):
 
 
 def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
-    print("Treinando modelo de clustering...")
     if isinstance(clustering_model, AgglomerativeClustering):
         clustering_model.fit(X_train)
         cluster_labels = clustering_model.labels_
@@ -95,7 +94,6 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
 
         pred_clusters = np.argmin(cdist(X_test, centroids), axis=1)
     else:
-        print("Treinando modelo de clustering...")
         clustering_model.fit(X_train)
         if hasattr(clustering_model, "labels_"):
             cluster_labels = clustering_model.labels_
@@ -104,7 +102,6 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
         pred_clusters = clustering_model.predict(X_test)
     cluster_class_map = {}
     for cluster in np.unique(cluster_labels):
-        print(f"Mapeando cluster {cluster} para rótulo...")
         indices = np.where(cluster_labels == cluster)[0]
         majority_label = Counter(y_train[indices]).most_common(1)[0][0]
         cluster_class_map[cluster] = majority_label
@@ -115,7 +112,7 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
 if __name__ == "__main__":
     resultados = {}
     seeds = range(1, 31)  # aumente para range(1, 31) depois de testar
-    max_k = 5
+    max_k = 8
     for dataset_path, dataset_name in [
         ("Adult.mat", "Adult"),
         ("Dry_bean.mat", "Dry Bean"),
@@ -124,7 +121,6 @@ if __name__ == "__main__":
         X, y = load_dataset_from_mat(dataset_path)
         resultados[dataset_name] = {}
 
-        print("Normalizando dados...")
         scaler = StandardScaler()
         X_scaled = scaler.fit_transform(X)
         ks = list(range(2, max_k + 1))
@@ -153,15 +149,12 @@ if __name__ == "__main__":
                 # Agglomerative
                 print(f"Executando Agglomerative para k={k}, seed={s}...")
                 agglo = AgglomerativeClustering(n_clusters=k)
-                print("Ajustando AgglomerativeClustering...")
                 labels = agglo.fit_predict(X_scaled)
                 if len(np.unique(labels)) > 1 and len(np.unique(labels)) < len(
                     X_scaled
                 ):
-                    print("Calculando silhouette score...")
                     score = silhouette_score(X_scaled, labels)
                 else:
-                    print("Silhouette score não calculável, atribuindo NaN...")
                     score = np.nan
                 silhouettes.append(score)
                 # GMM
