@@ -111,7 +111,7 @@ def cluster_supervised_classifier(X_train, y_train, X_test, clustering_model):
 
 if __name__ == "__main__":
     resultados = {}
-    seeds = range(1, 31)  # aumente para range(1, 31) depois de testar
+    seeds = range(1, 31)
     max_k = 8
     for dataset_path, dataset_name in [
         ("Adult.mat", "Adult"),
@@ -198,7 +198,7 @@ if __name__ == "__main__":
             filename=f"bic_gmm_{dataset_name.lower().replace(' ', '')}.png",
         )
 
-        # Escolha o melhor k a partir dos resultados já calculados
+        # Escolha o melhor k 
         best_k_kmeans = ks[np.argmin(resultados_kmeans)]
         best_k_agglo = ks[np.nanargmax(resultados_agglo)]
         best_k_gmm = ks[np.argmin(resultados_gmm)]
@@ -246,7 +246,7 @@ if __name__ == "__main__":
             print(f"Matriz de confusão média:\n{mean_cm}\n")
             resultados[dataset_name][model_type] = accs
 
-            # Matriz de confusão normalizada (heatmap)
+            # Matriz de confusão normalizada 
             class_labels = [str(int(c)) for c in np.unique(y)]
             plot_confusion_matrix_normalized(
                 mean_cm,
@@ -255,7 +255,7 @@ if __name__ == "__main__":
                 filename=f"cm_normalizada_{dataset_name.lower().replace(' ', '')}_{model_type}.png",
             )
 
-            # Clusters com PCA (usando primeira repetição)
+            # Clusters com PCA 
             plot_pca_clusters(
                 first_X_train,
                 first_labels,
@@ -263,7 +263,6 @@ if __name__ == "__main__":
                 filename=f"pca_clusters_{dataset_name.lower().replace(' ', '')}_{model_type}.png",
             )
 
-            # Salva acurácias para boxplot
             all_accs[model_type] = accs
 
         # Boxplot das acurácias
